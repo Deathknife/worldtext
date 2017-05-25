@@ -125,6 +125,7 @@ public int Handler_PlaceText(Menu menu, MenuAction menuaction, int client, int p
 		float fAng[3];
 		GetClientAimText(client, fPos, fAng);
 		
+		if(alClientRefs[client] != null) delete alClientRefs[client];
 		alClientRefs[client] = new ArrayList();
 		DrawFileText(client, path, fPos, fAng, false);
 		
@@ -306,6 +307,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 			DrawFileText(-1, textpath, pos, ang, true);
 		}
 	}
+	delete file;
 }
 
 public void DrawFileText(int client, char[] path, float fPos[3], float fAng[3], bool IgnoreFirstSize) {
