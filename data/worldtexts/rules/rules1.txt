@@ -1,0 +1,7 @@
+rgb=255 10 10
+size=20
+"RULES"
+
+size=5
+rgb=50 50 250
+"Also supports files within folders"

@@ -1,0 +1,10 @@
+rgb=255 100 50
+size=10
+"Welcome to my Counter Strike Server"
+"Each quoted text will end up being on a new line (below the above one)"
+size=5
+"You can specify size & rgb for each line. This line will be size 5 while above lines will be 10"
+rgb=50 50 50
+"This will also be size 5 and have different color as well"
+size=50
+"and so on"
