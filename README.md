@@ -48,4 +48,4 @@ also crappy video: https://youtu.be/edzk9VHRnFg
 
 simple plugin and spaghetti code.
 
-Credits to Zipcore for his stock that I shamelessly stole [url]https://forums.alliedmods.net/showpost.php?p=2523113&postcount=8[/url] & spotting the entity point_worldtext
+Credits to Zipcore for his stock that I shamelessly stole https://forums.alliedmods.net/showpost.php?p=2523113&postcount=8 & spotting the entity point_worldtext
