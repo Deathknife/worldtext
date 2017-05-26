@@ -14,6 +14,10 @@ char gClientFile[MAXPLAYERS + 1][PLATFORM_MAX_PATH];
 ArrayList alClientRefs[MAXPLAYERS + 1];
 float fLevels[] = {1.0, 5.0, 10.0, 25.0, 50.0, 100.0};
 
+//Variables to update
+ArrayList alEntUpdate;
+ArrayList alTextUpdate;
+
 public Plugin myinfo = 
 {
 	name = "World Text",
@@ -28,6 +32,23 @@ public void OnPluginStart()
 	RegAdminCmd("sm_wtmenu", Cmd_wtMenu, ADMFLAG_ROOT, "Open World Text Menu");
 	
 	HookEvent("round_start", Event_RoundStart);
+}
+
+public void OnMapStart() {
+	CreateTimer(1.0, UpdateWorldTexts, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action UpdateWorldTexts(Handle timer) {
+	if(alTextUpdate == null) return;
+	char buffer[512];
+	for(int i = 0; i < alTextUpdate.Length; i++) {
+		GetArrayString(alTextUpdate, i, buffer, sizeof(buffer));
+		int entity = EntRefToEntIndex(GetArrayCell(alEntUpdate, i));
+		if(entity == -1) continue;
+		if(!IsValidEntity(entity)) continue;
+		ParseVariables(entity, buffer, sizeof(buffer), false);
+		UpdateText(entity, buffer);
+	}
 }
 
 public void OnClientDisconnect(int client) {
@@ -280,12 +301,22 @@ public void SaveWorldText(int client, char[] entPath) {
 
 //Loud all texts
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast) {
+	//Reset array
+	if(alTextUpdate != null) {
+		delete alTextUpdate;
+	}
+	if(alEntUpdate != null) {
+		delete alEntUpdate;
+	}
+	alTextUpdate = new ArrayList(513);
+	alEntUpdate = new ArrayList();
+	
 	char path[PLATFORM_MAX_PATH];
 	char map[128];
 	GetCurrentMap(map, sizeof(map));
 	BuildPath(Path_SM, path, sizeof(path), "data/saved_world_texts/%s.txt", map);
 	
-	Handle file = OpenFile(path, "r");
+	Handle file = OpenFile(path, "rb");
 	char line[512];
 	float pos[3];
 	float ang[3];
@@ -312,7 +343,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
 public void DrawFileText(int client, char[] path, float fPos[3], float fAng[3], bool IgnoreFirstSize) {
 	//Open the file
-	Handle hFile = OpenFile(path, "r");
+	Handle hFile = OpenFile(path, "rb");
 	if(hFile == null) return;
 	
 	//Buffer to store content of a line 
@@ -320,6 +351,7 @@ public void DrawFileText(int client, char[] path, float fPos[3], float fAng[3], 
 	
 	int size = 5;
 	int rgb[3] = {255, 255, 255};
+	bool parseVars = true;
 	
 	while(!IsEndOfFile(hFile) && ReadFileLine(hFile, line, sizeof(line))) {
 		//Remove spaces at start & end 
@@ -336,31 +368,141 @@ public void DrawFileText(int client, char[] path, float fPos[3], float fAng[3], 
 			}else {
 				fPos[2] -= float(size);
 			}
-			int ent = EntIndexToEntRef(WorldText(fPos, fAng, line, size, rgb));
-			if(client != -1) PushArrayCell(alClientRefs[client], ent);
+			
+			int ent = WorldText(fPos, fAng, "", size, rgb);
+			if(ent == -1) continue;
+			int ref = EntIndexToEntRef(ent);
+			if(parseVars) {
+				ParseVariables(ent, line, sizeof(line), true);
+			}
+			
+			UpdateText(ent, line);
+			if(client != -1) PushArrayCell(alClientRefs[client], ref);
 		}else {
 			int posE = StrContains(line, "=");
-			if(StrContains(line, "rgb") == 0 && posE != -1) {
-				char temp[24];
-				strcopy(temp, sizeof(temp), line[posE+1]);
-				TrimString(temp);
+			char temp[24];
+			strcopy(temp, sizeof(temp), line[posE+1]);
+			TrimString(temp);
 				
+			if(StrContains(line, "rgb") == 0 && posE != -1) {
 				char sRGB[3][6];
 				ExplodeString(temp, " ", sRGB, sizeof(sRGB), sizeof(sRGB[]));
 				rgb[0] = StringToInt(sRGB[0]);
 				rgb[1] = StringToInt(sRGB[1]);
 				rgb[2] = StringToInt(sRGB[2]);
 			}else if(StrContains(line, "size") == 0 && posE != -1) {
-				char temp[16];
-				strcopy(temp, sizeof(temp), line[posE+1]);
-				TrimString(temp);
 				size = StringToInt(temp);
+			}else if(StrContains(line, "parseVariables") == 0 && posE != -1) {
+				parseVars = view_as<bool>(StringToInt(temp));
 			}
 		}
 	}
 	
 	//Close the file handle 
 	delete hFile;
+}
+
+public void ParseVariables(int entity, char[] text, int maxlength, bool addToUpdate) {
+	//Create buffer to store
+	int ilen = strlen(text);
+	char[] buffer = new char[ilen+1];
+	strcopy(buffer, ilen+1, text);
+	
+	//Find any {} and process them
+	int istart = -1;
+	int count = 0;
+	
+	char variable[64];
+	int iVar = 0;
+	
+	bool needsToBeHooked = false;
+	
+	for(int i = 0; i < ilen+1; i++) {
+		if(buffer[i] == '\0') break;
+		if(buffer[i] == '$' && i < ilen - 1 && buffer[i+1] == '{') {
+			istart = i;
+			iVar = 0;
+			i++; //Skip the {
+		}else if(istart != -1 && buffer[i] == '}') {
+			//Process that variable
+			variable[iVar] = '\0';
+			//should change this to abetter way later on
+			if(StrEqual(variable, "MAP")) {
+				char map[128];
+				GetCurrentMap(map, sizeof(map));
+				StrCat(text, maxlength, map);
+				count += strlen(map);
+			}else if(StrEqual(variable, "DATE")) {
+				char vBuffer[16];
+				FormatTime(vBuffer, sizeof(vBuffer), "%m/%d/%Y");
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+			}else if(StrEqual(variable, "TIME")) {
+				char vBuffer[16];
+				FormatTime(vBuffer, sizeof(vBuffer), "%I:%M:%S%p");
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+				needsToBeHooked = true;
+			}else if(StrEqual(variable, "TIME24")) {
+				char vBuffer[16];
+				FormatTime(vBuffer, sizeof(vBuffer), "%H:%M:%S");
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+				needsToBeHooked = true;
+			}else if(StrEqual(variable, "TIMELEFT")) {
+				char vBuffer[24];
+				int iMins, iSecs, iTimeLeft;
+				if (GetMapTimeLeft(iTimeLeft) && iTimeLeft > 0) {
+					iMins = iTimeLeft / 60;
+					iSecs = iTimeLeft % 60;
+				}
+				Format(vBuffer, sizeof(vBuffer), "%d:%02d", iMins, iSecs);
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+				needsToBeHooked = true;
+			}else if(StrEqual(variable, "PLAYERS")) {
+				char vBuffer[6];
+				IntToString(GetClientCount(), vBuffer, sizeof(vBuffer));
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+				needsToBeHooked = true;
+			}else if(StrEqual(variable, "MAXPLAYERS")) {
+				char vBuffer[6];
+				IntToString(GetMaxHumanPlayers(), vBuffer, sizeof(vBuffer));
+				StrCat(text, maxlength, vBuffer);
+				count += strlen(vBuffer);
+			}else if(StrContains(variable, "CVAR:") == 0) {
+				ConVar cvar = FindConVar(variable[5]);
+				if(cvar != null) {
+					char vBuffer[64];
+					GetConVarString(cvar, vBuffer, sizeof(vBuffer));
+					StrCat(text, maxlength, vBuffer);
+					count += strlen(vBuffer);
+					needsToBeHooked = true;
+				}
+			}
+			
+			//Start searching again
+			istart = -1;
+		}else if(istart != -1) {
+			if(iVar < sizeof(variable)) {
+				variable[iVar] = buffer[i];
+				iVar++;
+			}
+		}else {
+			text[count] = buffer[i];
+			count++;
+			text[count] = '\0';
+		}
+	}
+	if(needsToBeHooked && addToUpdate) {
+		if(alTextUpdate != null) {
+			//int size = GetArraySize(alTextUpdate);
+			//ResizeArray(alTextUpdate, size+1);
+			PushArrayString(alTextUpdate, buffer);
+			PushArrayCell(alEntUpdate, EntIndexToEntRef(entity));
+		}
+	}
 }
 
 public void GetClientAimText(int client, float fPos[3], float fAng[3]) {
@@ -406,6 +548,13 @@ stock int WorldText(float fPos[3], float fAngles[3], char[] sText = "", iSize = 
     TeleportEntity(iEntity, fPos, fAngles, NULL_VECTOR);
     
     return iEntity;
+}
+
+stock void UpdateText(int entity, char[] text) {
+	if(entity == -1) return;
+	if(!IsValidEntity(entity)) return;
+	
+	DispatchKeyValue(entity, "message", text);
 }
 
 stock bool IsValidClient(int client, bool bAlive = false)
