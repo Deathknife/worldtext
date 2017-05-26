@@ -1,7 +1,9 @@
 # worldtext
 data/worldtexts/ goes into addons/sourcemod/
 
+http://i.imgur.com/ERHsSpl.jpg
 
+![](http://i.imgur.com/3QIrJPg.jpg)
 
 Just create files in data/worldtexts/ and they will appear in the menu. Supports sub-folder files as well
 
@@ -43,8 +45,6 @@ size=5
 ```
 
 also crappy video: https://youtu.be/edzk9VHRnFg
-http://i.imgur.com/ERHsSpl.jpg
-http://i.imgur.com/3QIrJPg.jpg
 
 simple plugin and spaghetti code.
 
