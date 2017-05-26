@@ -317,6 +317,9 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	BuildPath(Path_SM, path, sizeof(path), "data/saved_world_texts/%s.txt", map);
 	
 	Handle file = OpenFile(path, "rb");
+	if(file == null) {
+		return;	//No save for current map
+	}
 	char line[512];
 	float pos[3];
 	float ang[3];
